@@ -1,0 +1,59 @@
+name: Detailed Debug Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev \
+          zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3 python3-requests
+        echo "✅ 环境设置完成"
+        
+    - name: Download ImageBuilder
+      run: |
+        echo "下载 ImageBuilder..."
+        wget --timeout=60 --tries=3 https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        ls -la *.tar.xz
+        tar -xf openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        echo "✅ 下载和解压完成"
+        
+    - name: Check ImageBuilder structure
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        echo "=== 目录结构 ==="
+        ls -la
+        echo "=== 目标目录 ==="
+        ls -la target/ || echo "目标目录不存在"
+        echo "=== 配置文件 ==="
+        find . -name "*.mk" -o -name "Config.in" | head -10
+        
+    - name: Test make command
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        echo "测试 make info..."
+        make info || echo "make info 失败"
+        echo "测试 make help..."
+        make help || echo "make help 失败"
+        
+    - name: Check specific profile
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        echo "=== 检查 ASUS 设备 ==="
+        make info | grep -i asus || echo "未找到ASUS设备"
+        echo "=== 所有设备 ==="
+        make info | grep profile || echo "无法获取设备列表"
+        
+    - name: Test package availability
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        echo "=== 检查软件包 ==="
+        find . -name "*.ipk" | head -5 || echo "未找到软件包"
+        ls -la packages/ || echo "packages目录不存在"
