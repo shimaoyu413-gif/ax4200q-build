@@ -1,0 +1,70 @@
+name: Final Complete AX4200Q Firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_chinese:
+        description: 'Include Chinese language support'
+        required: false
+        default: 'yes'
+        type: choice
+        options:
+        - yes
+        - no
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget xz-utils
+        
+    - name: Build complete firmware
+      run: |
+        wget -O ib.tar.xz https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf ib.tar.xz
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        echo "使用设备配置: $PROFILE"
+        
+        # 核心软件包
+        CORE_PACKAGES="luci luci-compat luci-theme-argon"
+        
+        # 完整 QoS 支持
+        QOS_PACKAGES="luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core kmod-ifb iptables-mod-filter iptables-mod-ipopt"
+        
+        # 额外功能
+        EXTRA_PACKAGES="luci-app-upnp luci-app-wol"
+        
+        # 中文支持
+        if [ "${{ github.event.inputs.include_chinese }}" = "yes" ]; then
+          CHINESE_PACKAGES="luci-i18n-base-zh-cn luci-i18n-qos-zh-cn luci-i18n-upnp-zh-cn"
+        else
+          CHINESE_PACKAGES=""
+        fi
+        
+        # 网络驱动和工具
+        NETWORK_PACKAGES="kmod-usb-core kmod-usb2 kmod-usb3"
+        
+        FULL_PACKAGES="$CORE_PACKAGES $QOS_PACKAGES $EXTRA_PACKAGES $CHINESE_PACKAGES $NETWORK_PACKAGES"
+        
+        echo "开始构建完整功能固件..."
+        echo "软件包列表: $FULL_PACKAGES"
+        make image PROFILE="$PROFILE" PACKAGES="$FULL_PACKAGES"
+        
+        echo "✅ 完整功能固件构建成功！"
+        echo "生成的固件文件:"
+        ls -la bin/targets/mediatek/filogic/
+
+    - name: Upload final firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-ax4200q-complete
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
+        retention-days: 30
