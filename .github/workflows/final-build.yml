@@ -1,0 +1,56 @@
+name: Final AX4200Q Build with Full Features
+
+on:
+  workflow_dispatch:
+    inputs:
+      extra_packages:
+        description: 'Additional packages'
+        required: false
+        default: 'luci-app-upnp luci-app-wol luci-app-zerotier'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget build-essential libncurses5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc unzip python3
+
+    - name: Download ImageBuilder
+      run: |
+        wget --timeout=60 --tries=3 https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        echo "✅ ImageBuilder 准备完成"
+
+    - name: Build full-featured firmware
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        # 获取可用设备
+        AVAILABLE_PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        echo "使用设备配置: $AVAILABLE_PROFILE"
+        
+        # 完整软件包列表
+        BASE_PACKAGES="luci luci-compat luci-theme-argon"
+        QOS_PACKAGES="luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core kmod-ifb iptables-mod-filter iptables-mod-ipopt"
+        NETWORK_PACKAGES="kmod-usb-core kmod-usb2 kmod-usb3"
+        CHINESE_PACKAGES="luci-i18n-base-zh-cn luci-i18n-qos-zh-cn"
+        
+        echo "开始构建完整功能固件..."
+        make image PROFILE="$AVAILABLE_PROFILE" \
+          PACKAGES="$BASE_PACKAGES $QOS_PACKAGES $NETWORK_PACKAGES $CHINESE_PACKAGES ${{ github.event.inputs.extra_packages }}"
+        
+        echo "✅ 完整功能固件构建完成！"
+        echo "生成的固件文件:"
+        ls -la bin/targets/mediatek/filogic/
+
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-ax4200q-full-featured
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
+        retention-days: 30
