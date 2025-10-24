@@ -1,0 +1,43 @@
+name: Ultra Minimal Build
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Clean environment setup
+      run: |
+        sudo apt-get update
+        # 只安装最核心的依赖
+        sudo apt-get install -y wget xz-utils
+        
+    - name: Download and test raw ImageBuilder
+      run: |
+        echo "步骤1: 下载ImageBuilder"
+        wget -O ib.tar.xz https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        
+        echo "步骤2: 验证文件完整性"
+        tar -tf ib.tar.xz | head -5
+        ls -la ib.tar.xz
+        
+        echo "步骤3: 解压"
+        tar -xf ib.tar.xz
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        echo "步骤4: 测试空构建"
+        PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        echo "测试设备: $PROFILE"
+        
+        # 完全空包构建测试
+        make image PROFILE="$PROFILE" PACKAGES=""
+        
+        echo "✅ 基础构建测试成功！"
+        
+    - name: Upload minimal firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-minimal-test
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
