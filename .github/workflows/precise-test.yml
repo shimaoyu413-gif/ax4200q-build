@@ -1,0 +1,68 @@
+name: Precise Package Testing
+on:
+  workflow_dispatch:
+    inputs:
+      test_case:
+        description: 'Test Case'
+        required: true
+        default: 'qos-core'
+        type: choice
+        options:
+        - qos-core
+        - qos-full
+        - qos-kmods
+        - qos-complete
+        - with-upnp
+        - with-wol
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget xz-utils
+        
+    - name: Test Case ${{ github.event.inputs.test_case }}
+      run: |
+        wget -O ib.tar.xz https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf ib.tar.xz
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        
+        case "${{ github.event.inputs.test_case }}" in
+          "qos-core")
+            PACKAGES="luci luci-app-qos qos-scripts"
+            ;;
+          "qos-full")
+            PACKAGES="luci luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core"
+            ;;
+          "qos-kmods")
+            PACKAGES="luci luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core kmod-ifb"
+            ;;
+          "qos-complete")
+            PACKAGES="luci luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core kmod-ifb iptables-mod-filter iptables-mod-ipopt"
+            ;;
+          "with-upnp")
+            PACKAGES="luci luci-app-qos qos-scripts luci-app-upnp"
+            ;;
+          "with-wol")
+            PACKAGES="luci luci-app-qos qos-scripts luci-app-wol"
+            ;;
+        esac
+        
+        echo "测试用例: ${{ github.event.inputs.test_case }}"
+        echo "软件包: $PACKAGES"
+        make image PROFILE="$PROFILE" PACKAGES="$PACKAGES"
+        echo "✅ 测试用例 ${{ github.event.inputs.test_case }} 成功！"
+        
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-${{ github.event.inputs.test_case }}
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
