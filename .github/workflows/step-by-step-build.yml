@@ -1,0 +1,72 @@
+name: Step by Step AX4200Q Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_stage:
+        description: 'Build stage'
+        required: true
+        default: 'stage1'
+        type: choice
+        options:
+        - stage1
+        - stage2
+        - stage3
+        - stage4
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget build-essential libncurses5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc unzip python3
+
+    - name: Download ImageBuilder
+      run: |
+        wget --timeout=60 --tries=3 https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        echo "✅ ImageBuilder 准备完成"
+
+    - name: Build Stage ${{ github.event.inputs.build_stage }}
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        AVAILABLE_PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        echo "使用设备配置: $AVAILABLE_PROFILE"
+        
+        # 分阶段构建
+        case "${{ github.event.inputs.build_stage }}" in
+          "stage1")
+            echo "=== 阶段1: 基础固件 ==="
+            PACKAGES="luci luci-compat"
+            ;;
+          "stage2")
+            echo "=== 阶段2: 基础 + QoS 核心 ==="
+            PACKAGES="luci luci-compat luci-app-qos qos-scripts"
+            ;;
+          "stage3")
+            echo "=== 阶段3: 基础 + QoS 完整 ==="
+            PACKAGES="luci luci-compat luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core"
+            ;;
+          "stage4")
+            echo "=== 阶段4: 完整功能 ==="
+            PACKAGES="luci luci-compat luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core kmod-ifb iptables-mod-filter luci-theme-argon"
+            ;;
+        esac
+        
+        echo "软件包列表: $PACKAGES"
+        make image PROFILE="$AVAILABLE_PROFILE" PACKAGES="$PACKAGES"
+        
+        echo "✅ 阶段 ${{ github.event.inputs.build_stage }} 构建完成！"
+        ls -la bin/targets/mediatek/filogic/
+
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-stage-${{ github.event.inputs.build_stage }}
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
