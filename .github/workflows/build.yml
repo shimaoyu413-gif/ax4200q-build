@@ -23,29 +23,52 @@ jobs:
 
     - name: Download OpenWrt ImageBuilder
       run: |
-        wget https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        echo "下载 ImageBuilder..."
+        wget --timeout=60 --tries=3 https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        echo "下载完成，文件大小: $(ls -lh openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz | awk '{print $5}')"
         tar -xf openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        echo "✅ ImageBuilder 准备就绪"
 
-    - name: Build firmware
+    - name: Check available profiles
       run: |
         cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
-        # 查找可用的ASUS设备配置文件
+        echo "=== 可用设备列表 ==="
+        make info
+        echo "=== ASUS 设备 ==="
+        make info | grep -i asus || echo "未找到ASUS设备"
+
+    - name: Build firmware with QoS
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        # 查找可用的ASUS设备
         ASUS_PROFILE=$(make info | grep -i asus | head -1 | cut -d'"' -f2)
+        
         if [ -z "$ASUS_PROFILE" ]; then
+          echo "没有找到ASUS设备，使用第一个可用设备"
           ASUS_PROFILE=$(make info | grep profile | head -1 | cut -d'"' -f2)
         fi
-        echo "Using profile: $ASUS_PROFILE"
-
-        # 基础软件包和QoS相关软件包
+        
+        echo "使用设备配置: $ASUS_PROFILE"
+        
+        # 基础软件包
         BASE_PACKAGES="luci luci-compat luci-theme-argon"
+        # QoS完整支持
         QOS_PACKAGES="luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core kmod-ifb iptables-mod-filter iptables-mod-ipopt"
-
+        # 网络驱动
+        NETWORK_PACKAGES="kmod-mt7915e kmod-mt7916-firmware"
+        
+        echo "开始构建固件..."
         make image PROFILE="$ASUS_PROFILE" \
-          PACKAGES="$BASE_PACKAGES $QOS_PACKAGES ${{ github.event.inputs.packages }}"
+          PACKAGES="$BASE_PACKAGES $QOS_PACKAGES $NETWORK_PACKAGES ${{ github.event.inputs.packages }}"
+        
+        echo "✅ 固件构建完成"
+        echo "生成的固件文件:"
+        ls -la bin/targets/mediatek/filogic/
 
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
       with:
-        name: openwrt-firmware
+        name: openwrt-ax4200q-firmware
         path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
         retention-days: 30
