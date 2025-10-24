@@ -1,0 +1,64 @@
+name: Stable AX4200Q Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_extra:
+        description: 'Include extra packages'
+        required: false
+        default: 'no'
+        type: choice
+        options:
+        - no
+        - yes
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget build-essential libncurses5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc unzip python3
+
+    - name: Download ImageBuilder
+      run: |
+        wget --timeout=60 --tries=3 https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        echo "✅ ImageBuilder 准备完成"
+
+    - name: Build stable firmware
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        AVAILABLE_PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        echo "使用设备配置: $AVAILABLE_PROFILE"
+        
+        # 核心软件包 - 确保稳定性
+        CORE_PACKAGES="luci luci-compat luci-theme-argon"
+        QOS_PACKAGES="luci-app-qos qos-scripts"
+        
+        # 可选软件包 - 避免冲突
+        if [ "${{ github.event.inputs.include_extra }}" = "yes" ]; then
+          EXTRA_PACKAGES="luci-app-upnp luci-app-wol"
+        else
+          EXTRA_PACKAGES=""
+        fi
+        
+        echo "开始构建稳定固件..."
+        echo "软件包列表: $CORE_PACKAGES $QOS_PACKAGES $EXTRA_PACKAGES"
+        
+        make image PROFILE="$AVAILABLE_PROFILE" \
+          PACKAGES="$CORE_PACKAGES $QOS_PACKAGES $EXTRA_PACKAGES"
+        
+        echo "✅ 稳定固件构建成功！"
+        ls -la bin/targets/mediatek/filogic/
+
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-stable-build
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
