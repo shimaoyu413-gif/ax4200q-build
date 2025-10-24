@@ -1,0 +1,54 @@
+name: Optimized AX4200Q Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Extra packages'
+        required: false
+        default: 'luci-app-qos luci-app-upnp'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup minimal environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget build-essential libncurses5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc unzip python3
+
+    - name: Download ImageBuilder
+      run: |
+        wget --timeout=60 --tries=3 https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        echo "✅ ImageBuilder 准备完成"
+
+    - name: Find and use available profile
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        # 获取所有可用设备
+        echo "=== 所有可用设备 ==="
+        make info
+        
+        # 选择第一个可用的设备（避免特定设备问题）
+        AVAILABLE_PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        echo "使用设备: $AVAILABLE_PROFILE"
+        
+        # 基础软件包（最小集）
+        BASE_PACKAGES="luci luci-compat"
+        
+        echo "开始构建..."
+        make image PROFILE="$AVAILABLE_PROFILE" PACKAGES="$BASE_PACKAGES ${{ github.event.inputs.packages }}"
+        
+        echo "✅ 构建完成！"
+        ls -la bin/targets/mediatek/filogic/
+
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-minimal-firmware
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
