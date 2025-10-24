@@ -1,0 +1,51 @@
+name: Build OpenWrt for AX4200Q
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Extra packages (space separated)'
+        required: false
+        default: 'luci-app-qos luci-app-upnp luci-app-wol'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev \
+          zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3 python3-requests
+
+    - name: Download OpenWrt ImageBuilder
+      run: |
+        wget https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+
+    - name: Build firmware
+      run: |
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        # 查找可用的ASUS设备配置文件
+        ASUS_PROFILE=$(make info | grep -i asus | head -1 | cut -d'"' -f2)
+        if [ -z "$ASUS_PROFILE" ]; then
+          ASUS_PROFILE=$(make info | grep profile | head -1 | cut -d'"' -f2)
+        fi
+        echo "Using profile: $ASUS_PROFILE"
+
+        # 基础软件包和QoS相关软件包
+        BASE_PACKAGES="luci luci-compat luci-theme-argon"
+        QOS_PACKAGES="luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core kmod-ifb iptables-mod-filter iptables-mod-ipopt"
+
+        make image PROFILE="$ASUS_PROFILE" \
+          PACKAGES="$BASE_PACKAGES $QOS_PACKAGES ${{ github.event.inputs.packages }}"
+
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-firmware
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
+        retention-days: 30
