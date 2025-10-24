@@ -1,0 +1,55 @@
+name: Incremental Build
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Build Stage'
+        required: true
+        default: 'luci-only'
+        type: choice
+        options:
+        - luci-only
+        - luci-qos
+        - full-qos
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget xz-utils
+        
+    - name: Stage ${{ github.event.inputs.stage }} Build
+      run: |
+        wget -O ib.tar.xz https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf ib.tar.xz
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        
+        case "${{ github.event.inputs.stage }}" in
+          "luci-only")
+            PACKAGES="luci"
+            ;;
+          "luci-qos")
+            PACKAGES="luci luci-app-qos"
+            ;;
+          "full-qos")
+            PACKAGES="luci luci-app-qos qos-scripts"
+            ;;
+        esac
+        
+        echo "构建阶段: ${{ github.event.inputs.stage }}"
+        echo "软件包: $PACKAGES"
+        make image PROFILE="$PROFILE" PACKAGES="$PACKAGES"
+        
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-${{ github.event.inputs.stage }}
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
