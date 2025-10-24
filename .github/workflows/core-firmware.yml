@@ -1,0 +1,41 @@
+name: Core Firmware with Basic QoS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget xz-utils
+        
+    - name: Build core firmware
+      run: |
+        wget -O ib.tar.xz https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf ib.tar.xz
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        
+        # 核心软件包 - 确保100%成功
+        CORE_PACKAGES="luci luci-compat luci-theme-argon kmod-usb-core kmod-usb2 kmod-usb3"
+        
+        # 基础QoS - 我们知道这个组合能成功
+        QOS_BASIC="luci-app-qos qos-scripts kmod-sched-cake"
+        
+        echo "构建核心固件..."
+        make image PROFILE="$PROFILE" PACKAGES="$CORE_PACKAGES $QOS_BASIC"
+        
+        echo "✅ 核心固件构建成功！"
+        
+    - name: Upload core firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-ax4200q-core
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
