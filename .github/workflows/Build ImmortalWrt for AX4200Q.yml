@@ -1,0 +1,49 @@
+name: Build ImmortalWrt for AX4200Q
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget xz-utils
+        
+    - name: Download ImmortalWrt ImageBuilder
+      run: |
+        wget -O ib.tar.xz https://downloads.immortalwrt.org/releases/23.05.4/targets/mediatek/filogic/immortalwrt-imagebuilder-23.05.4-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf ib.tar.xz
+        cd immortalwrt-imagebuilder-23.05.4-mediatek-filogic.Linux-x86_64
+        
+        echo "=== ImmortalWrt 可用设备 ==="
+        make info | grep -i asus
+        
+    - name: Build ImmortalWrt firmware
+      run: |
+        cd immortalwrt-imagebuilder-23.05.4-mediatek-filogic.Linux-x86_64
+        
+        # 尝试找到 ASUS 设备
+        ASUS_PROFILE=$(make info | grep -i asus | head -1 | cut -d'"' -f2)
+        
+        if [ -z "$ASUS_PROFILE" ]; then
+          echo "未找到ASUS设备，列出所有设备:"
+          make info
+          ASUS_PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        fi
+        
+        echo "使用设备: $ASUS_PROFILE"
+        PACKAGES="luci luci-compat kmod-usb-core kmod-usb2 kmod-usb3"
+        
+        make image PROFILE="$ASUS_PROFILE" PACKAGES="$PACKAGES"
+        
+    - name: Upload ImmortalWrt firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: immortalwrt-build
+        path: immortalwrt-imagebuilder-23.05.4-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
