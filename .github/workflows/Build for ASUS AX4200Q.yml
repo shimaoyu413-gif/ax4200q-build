@@ -1,0 +1,55 @@
+name: Build for ASUS AX4200Q
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget xz-utils
+        
+    - name: Build with explicit ASUS profile
+      run: |
+        wget -O ib.tar.xz https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf ib.tar.xz
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        echo "=== 所有可用设备 ==="
+        make info
+        
+        echo "=== 尝试使用 ASUS 设备 ==="
+        # 尝试不同的 ASUS 设备名称
+        for profile in "asus_tuf-ax4200q" "asus_tuf-ax4200" "tuf-ax4200" "asus" ; do
+          if make info | grep -q "$profile"; then
+            ASUS_PROFILE=$(make info | grep "$profile" | head -1 | cut -d'"' -f2)
+            echo "找到设备: $ASUS_PROFILE"
+            break
+          fi
+        done
+        
+        if [ -z "$ASUS_PROFILE" ]; then
+          echo "错误：未找到任何ASUS设备，使用第一个可用设备"
+          ASUS_PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+          echo "使用设备: $ASUS_PROFILE"
+        fi
+        
+        # 基础软件包
+        PACKAGES="luci luci-compat kmod-usb-core kmod-usb2 kmod-usb3"
+        
+        make image PROFILE="$ASUS_PROFILE" PACKAGES="$PACKAGES"
+        
+        echo "生成的固件文件:"
+        ls -la bin/targets/mediatek/filogic/*.bin
+        
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-asus-build
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
