@@ -1,0 +1,54 @@
+name: Build Minimal AX4200Q System
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget xz-utils
+        
+    - name: Build minimal firmware
+      run: |
+        wget -O ib.tar.xz https://downloads.openwrt.org/releases/23.05.3/targets/mediatek/filogic/openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64.tar.xz
+        tar -xf ib.tar.xz
+        cd openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64
+        
+        PROFILE=$(make info | grep "PROFILE_" | head -1 | cut -d'"' -f2)
+        echo "使用设备配置: $PROFILE"
+        
+        # 绝对最小但功能完整的软件包集合
+        # 1. 基础系统
+        BASE_PACKAGES="luci luci-compat"
+        
+        # 2. 网络基础（确保网口驱动）
+        NETWORK_PACKAGES="kmod-mt7915e kmod-mt7916-firmware"
+        
+        # 3. 必要的工具
+        TOOL_PACKAGES="opkg curl wget"
+        
+        # 4. USB支持（如果需要）
+        USB_PACKAGES="kmod-usb-core kmod-usb2 kmod-usb3"
+        
+        MINIMAL_PACKAGES="$BASE_PACKAGES $NETWORK_PACKAGES $TOOL_PACKAGES $USB_PACKAGES"
+        
+        echo "构建最小系统固件..."
+        echo "软件包列表: $MINIMAL_PACKAGES"
+        make image PROFILE="$PROFILE" PACKAGES="$MINIMAL_PACKAGES"
+        
+        echo "✅ 最小系统固件构建成功！"
+        echo "生成的固件文件:"
+        ls -la bin/targets/mediatek/filogic/
+
+    - name: Upload minimal firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-ax4200q-minimal
+        path: openwrt-imagebuilder-23.05.3-mediatek-filogic.Linux-x86_64/bin/targets/mediatek/filogic/*.bin
