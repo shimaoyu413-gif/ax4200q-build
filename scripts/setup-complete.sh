@@ -1,0 +1,53 @@
+#!/bin/sh
+# AX4200Q 完整功能安装脚本
+# 刷入最小系统后运行此脚本
+
+set -e
+
+echo "=== AX4200Q 完整功能安装 ==="
+echo "开始时间: $(date)"
+
+# 1. 更新软件源
+echo "步骤1: 更新软件包列表..."
+opkg update
+
+# 2. 安装完整QoS功能
+echo "步骤2: 安装完整QoS支持..."
+QOS_PACKAGES="luci-app-qos qos-scripts kmod-sched-cake kmod-sched-core kmod-ifb iptables-mod-filter iptables-mod-ipopt"
+for pkg in $QOS_PACKAGES; do
+    echo "安装: $pkg"
+    opkg install $pkg || echo "警告: $pkg 安装失败，继续..."
+done
+
+# 3. 安装主题和界面美化
+echo "步骤3: 安装界面主题..."
+opkg install luci-theme-argon
+
+# 4. 安装额外网络功能
+echo "步骤4: 安装网络功能..."
+EXTRA_PACKAGES="luci-app-upnp luci-app-wol"
+for pkg in $EXTRA_PACKAGES; do
+    echo "安装: $pkg"
+    opkg install $pkg || echo "警告: $pkg 安装失败，继续..."
+done
+
+# 5. 安装中文支持
+echo "步骤5: 安装中文语言包..."
+CHINESE_PACKAGES="luci-i18n-base-zh-cn luci-i18n-qos-zh-cn luci-i18n-upnp-zh-cn"
+for pkg in $CHINESE_PACKAGES; do
+    echo "安装: $pkg"
+    opkg install $pkg || echo "警告: $pkg 安装失败，继续..."
+done
+
+# 6. 验证安装
+echo "步骤6: 验证安装结果..."
+echo "已安装的QoS相关包:"
+opkg list-installed | grep -E "(qos|sched|iptables)" || echo "未找到QoS相关包"
+
+echo "已安装的LuCI相关包:"
+opkg list-installed | grep luci | head -10
+
+echo "=== 安装完成！ ==="
+echo "完成时间: $(date)"
+echo "请重启路由器使所有功能生效："
+echo "reboot"
